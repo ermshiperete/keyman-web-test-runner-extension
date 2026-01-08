@@ -2,15 +2,23 @@ import * as vscode from 'vscode';
 import { TestController } from './testController';
 import { TestRunner } from './testRunner';
 
-let testController: TestController;
-let testRunner: TestRunner;
-
+// see also https://github.com/microsoft/vscode-extension-samples/blob/main/test-provider-sample
+// and https://github.com/microsoft/vscode/tree/main/.vscode/extensions/vscode-selfhost-test-provider
+// Documentation: https://code.visualstudio.com/api/extension-guides/testing
 /**
  * Activate the extension
  */
 export function activate(context: vscode.ExtensionContext): void {
   // Public function - exported
   console.log('web-test-runner-extension is now active');
+
+  const disposable = vscode.commands.registerCommand('helloworld.helloWorld', () => {
+    // The code you place here will be executed every time your command is executed
+    // Display a message box to the user
+    vscode.window.showInformationMessage('Hello World from HelloWorld!');
+  });
+
+  context.subscriptions.push(disposable);
 
   const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
 
@@ -20,8 +28,8 @@ export function activate(context: vscode.ExtensionContext): void {
   }
 
   // Initialize test runner and controller
-  testRunner = new TestRunner(workspaceRoot);
-  testController = new TestController(workspaceRoot, testRunner);
+  const testRunner = new TestRunner(workspaceRoot);
+  const testController = new TestController(workspaceRoot, testRunner);
 
   // Add to subscriptions for cleanup
   context.subscriptions.push(testController);
@@ -35,12 +43,4 @@ export function activate(context: vscode.ExtensionContext): void {
  * Deactivate the extension
  */
 export function deactivate(): void {
-  // Public function - exported
-  if (testController) {
-    testController.dispose();
-  }
-
-  if (testRunner) {
-    testRunner.dispose();
-  }
 }

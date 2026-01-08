@@ -10,14 +10,17 @@
     "Testing"
   ],
   "activationEvents": [
-    "workspaceContains:web-test-runner.config.*",
-    "workspaceContains:**/*.test.ts",
-    "workspaceContains:**/*.test.js",
-    "workspaceContains:**/*.spec.ts",
-    "workspaceContains:**/*.spec.js"
+    "workspaceContains:**/web-test-runner.config.mjs"
   ],
   "main": "./dist/extension.js",
-  "contributes": {},
+  "contributes": {
+    "commands": [
+      {
+        "command": "helloworld.helloWorld",
+        "title": "Hello World"
+      }
+    ]
+  },
   "scripts": {
     "vscode:prepublish": "npm run package",
     "compile": "webpack",

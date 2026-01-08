@@ -124,9 +124,26 @@ export class TestController implements vscode.Disposable {
    * Create a test item for a file
    */
   private createTestItem(file: vscode.Uri): void {
-    const relPath = path.relative(this.workspaceRoot, file.fsPath);
     const testId = `test:${file.fsPath}`;
     const label = path.basename(file.fsPath);
+    if (label.endsWith('.js')) {
+      const tsLabel = label.replace('.js', '.ts');
+      for (const [id] of this.controller.items) {
+        if (id.endsWith(tsLabel)) {
+          // We already have a .ts file, so we don't need to add the .js file
+          return;
+        }
+      }
+    } else if (label.endsWith('.ts')) {
+      const jsLabel = label.replace('.ts', '.js');
+      for (const [id] of this.controller.items) {
+        if (id.endsWith(jsLabel)) {
+          // We prefer the .ts file
+          this.controller.items.delete(id);
+          break;
+        }
+      }
+    }
 
     const testItem = this.controller.createTestItem(testId, label, file);
     testItem.range = new vscode.Range(new vscode.Position(0, 0), new vscode.Position(0, 0));
