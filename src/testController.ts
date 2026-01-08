@@ -109,20 +109,17 @@ export class TestController implements vscode.Disposable {
     this.controller.items.replace([]);
 
     // Try to load from config file
-    const configPath = ConfigLoader.findConfigFile(this.workspaceRoot);
-    if (configPath) {
+    const configFiles = await ConfigLoader.findConfigFiles();
+    configFiles.forEach(async configPath => {
       await this.discoverFromConfig(configPath, workspaceFolder);
-    } else {
-      // Fallback to globbing if no config found
-      await this.discoverFromGlob(workspaceFolder);
-    }
+    });
   }
 
   /**
    * Discover tests from web-test-runner.config.mjs
    */
   private async discoverFromConfig(configPath: string, workspaceFolder: vscode.WorkspaceFolder): Promise<void> {
-    const config = ConfigLoader.loadConfig(configPath);
+    const config = await ConfigLoader.loadConfig(configPath);
 
     // Process groups if they exist
     if (config.groups && config.groups.length > 0) {
@@ -135,13 +132,15 @@ export class TestController implements vscode.Disposable {
         groupItem.canResolveChildren = false;
 
         // Add test files to group
-        for (const filePath of group.files) {
-          const fullPath = path.resolve(this.workspaceRoot, filePath);
-          if (fs.existsSync(fullPath)) {
-            const fileUri = vscode.Uri.file(fullPath);
+        for (const filePattern of group.files) {
+          const files = await vscode.workspace.findFiles(
+              filePattern,
+              '**/node_modules/**'
+          );
+          for (const fileUri of files) {
             const testItem = this.controller.createTestItem(
-              `test:${fullPath}`,
-              path.basename(fullPath),
+              `test:${fileUri.path}`,
+              path.basename(fileUri.path),
               fileUri
             );
             testItem.range = new vscode.Range(new vscode.Position(0, 0), new vscode.Position(0, 0));
@@ -151,8 +150,10 @@ export class TestController implements vscode.Disposable {
 
         this.controller.items.add(groupItem);
       }
-    } else if (config.files && config.files.length > 0) {
-      // Process top-level files if no groups
+    }
+
+    if (config.files && config.files.length > 0) {
+      // Process top-level files
       for (const filePath of config.files) {
         const fullPath = path.resolve(this.workspaceRoot, filePath);
         if (fs.existsSync(fullPath)) {
@@ -160,9 +161,6 @@ export class TestController implements vscode.Disposable {
           this.createTestItem(fileUri);
         }
       }
-    } else {
-      // Config exists but has no files/groups, fallback to globbing
-      await this.discoverFromGlob(workspaceFolder);
     }
   }
 
