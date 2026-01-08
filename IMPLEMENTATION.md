@@ -7,9 +7,11 @@ This VS Code extension provides an integrated test explorer for `web-test-runner
 ## Features
 
 ### Test Discovery
-- Automatically discovers test files matching patterns:
+- Reads test files and groups from `web-test-runner.config.mjs` if present
+- Falls back to automatic file discovery matching patterns if no config:
   - `*.test.ts` / `*.test.js`
   - `*.spec.ts` / `*.spec.js`
+- Organizes tests by configuration groups for logical grouping
 - Real-time synchronization with file system changes
 - Configurable activation based on workspace structure
 
@@ -38,15 +40,31 @@ Main entry point that:
 
 #### `testController.ts` (TestController)
 Implements VS Code's Test Controller API:
-- Discovers test files in workspace using file globbing
+- Loads test configuration from `web-test-runner.config.mjs`
+- Organizes tests into groups from configuration
+- Falls back to file globbing if no config present
 - Manages test item creation and population
 - Registers test run and resolve handlers
 - Watches for file system changes and auto-refreshes tests
 
 **Key Methods:**
-- `discoverTests()` - Scan workspace for test files
+- `discoverTests()` - Load tests from config or glob filesystem
+- `discoverFromConfig()` - Parse and organize tests from config file
+- `discoverFromGlob()` - Auto-discover tests by file patterns
 - `createTestItem(file)` - Create test item for file
 - `dispose()` - Clean up resources
+
+#### `configLoader.ts` (ConfigLoader)
+Parses web-test-runner configuration files:
+- Finds `web-test-runner.config.mjs/js/ts` in workspace root
+- Extracts test groups and file lists using regex parsing
+- Provides fallback to filesystem globbing
+
+**Key Methods:**
+- `findConfigFile(workspaceRoot)` - Locate config file
+- `loadConfig(configPath)` - Load and parse configuration
+- `parseGroups()` - Extract test groups from config
+- `parseArray()` - Parse string arrays from config content
 
 #### `testRunner.ts` (TestRunner)
 Manages test execution:

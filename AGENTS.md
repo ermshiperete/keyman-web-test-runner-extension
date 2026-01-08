@@ -45,12 +45,15 @@ This document defines the style, structure, and commands for agent work in this 
 
 ### Test Explorer
 - Uses VS Code's native Test Explorer API (TestController)
-- Discovers test files matching `*.test.ts`, `*.test.js`, `*.spec.ts`, `*.spec.js`
+- Discovers tests from `web-test-runner.config.mjs` (groups and files)
+- Groups tests by configuration groups for better organization
+- Falls back to filesystem globbing if no config found
 - Integrated tree view in Testing sidebar
 - Run tests directly from VS Code's test interface
 - Auto-refresh when test files change
 
 ### Key Modules
 - `testController.ts` - Implements TestController for test discovery and execution
+- `configLoader.ts` - Parses web-test-runner configuration files
 - `testRunner.ts` - Executes web-test-runner commands and parses results
 - `extension.ts` - Main extension entry point and lifecycle management

@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import { TestRunner } from './testRunner';
+import { ConfigLoader } from './configLoader';
 
 /**
  * Manages test discovery and execution using VS Code's Test Controller API
@@ -98,7 +99,6 @@ export class TestController implements vscode.Disposable {
    * Discover test files and populate test tree
    */
   public async discoverTests(): Promise<void> {
-    const patterns = ['**/*.test.ts', '**/*.test.js', '**/*.tests.ts', '**/*.tests.js', '**/*.spec.ts', '**/*.spec.js'];
     const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
 
     if (!workspaceFolder) {
@@ -107,6 +107,70 @@ export class TestController implements vscode.Disposable {
 
     // Clear existing tests
     this.controller.items.replace([]);
+
+    // Try to load from config file
+    const configPath = ConfigLoader.findConfigFile(this.workspaceRoot);
+    if (configPath) {
+      await this.discoverFromConfig(configPath, workspaceFolder);
+    } else {
+      // Fallback to globbing if no config found
+      await this.discoverFromGlob(workspaceFolder);
+    }
+  }
+
+  /**
+   * Discover tests from web-test-runner.config.mjs
+   */
+  private async discoverFromConfig(configPath: string, workspaceFolder: vscode.WorkspaceFolder): Promise<void> {
+    const config = ConfigLoader.loadConfig(configPath);
+
+    // Process groups if they exist
+    if (config.groups && config.groups.length > 0) {
+      for (const group of config.groups) {
+        const groupItem = this.controller.createTestItem(
+          `group:${group.name}`,
+          group.name,
+          workspaceFolder.uri
+        );
+        groupItem.canResolveChildren = false;
+
+        // Add test files to group
+        for (const filePath of group.files) {
+          const fullPath = path.resolve(this.workspaceRoot, filePath);
+          if (fs.existsSync(fullPath)) {
+            const fileUri = vscode.Uri.file(fullPath);
+            const testItem = this.controller.createTestItem(
+              `test:${fullPath}`,
+              path.basename(fullPath),
+              fileUri
+            );
+            testItem.range = new vscode.Range(new vscode.Position(0, 0), new vscode.Position(0, 0));
+            groupItem.children.add(testItem);
+          }
+        }
+
+        this.controller.items.add(groupItem);
+      }
+    } else if (config.files && config.files.length > 0) {
+      // Process top-level files if no groups
+      for (const filePath of config.files) {
+        const fullPath = path.resolve(this.workspaceRoot, filePath);
+        if (fs.existsSync(fullPath)) {
+          const fileUri = vscode.Uri.file(fullPath);
+          this.createTestItem(fileUri);
+        }
+      }
+    } else {
+      // Config exists but has no files/groups, fallback to globbing
+      await this.discoverFromGlob(workspaceFolder);
+    }
+  }
+
+  /**
+   * Discover tests by globbing filesystem
+   */
+  private async discoverFromGlob(workspaceFolder: vscode.WorkspaceFolder): Promise<void> {
+    const patterns = ['**/*.test.ts', '**/*.test.js', '**/*.tests.ts', '**/*.tests.js', '**/*.spec.ts', '**/*.spec.js'];
 
     for (const pattern of patterns) {
       const files = await vscode.workspace.findFiles(
