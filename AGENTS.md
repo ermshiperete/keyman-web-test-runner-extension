@@ -39,3 +39,17 @@ This document defines the style, structure, and commands for agent work in this 
 - Write tests alongside features
 - Aim for >80% code coverage
 - Use mocha for unit tests
+- Use web-test-runner for running tests
+
+## Extension Features
+
+### Test Explorer
+- Discovers test files matching `*.test.ts`, `*.test.js`, `*.spec.ts`, `*.spec.js`
+- Tree view in Testing sidebar
+- Run all tests or individual test files
+- Auto-refresh when test files change
+
+### Key Modules
+- `testExplorer.ts` - Tree data provider for test discovery and display
+- `testRunner.ts` - Executes web-test-runner commands
+- `extension.ts` - Main extension entry point and command handlers
