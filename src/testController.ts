@@ -6,17 +6,17 @@ import { TestRunner } from './testRunner';
 /**
  * Manages test discovery and execution using VS Code's Test Controller API
  */
-export class TestController {
+export class TestController implements vscode.Disposable {
   private controller: vscode.TestController;
   private testRunner: TestRunner;
   private workspaceRoot: string;
   private fileWatcher: vscode.FileSystemWatcher;
 
-  constructor(workspaceRoot: string, testRunner: TestRunner) {
+  public constructor(workspaceRoot: string, testRunner: TestRunner) {
     this.workspaceRoot = workspaceRoot;
     this.testRunner = testRunner;
     this.controller = vscode.tests.createTestController('webTestRunner', 'Web Test Runner');
-    this.fileWatcher = vscode.workspace.createFileSystemWatcher('**/*.{test,spec}.{ts,js}');
+    this.fileWatcher = vscode.workspace.createFileSystemWatcher('**/*.{test,tests,spec}.{ts,js}');
 
     this.setupFileWatcher();
     this.setupTestController();
@@ -97,8 +97,8 @@ export class TestController {
   /**
    * Discover test files and populate test tree
    */
-  async discoverTests(): Promise<void> {
-    const patterns = ['**/*.test.ts', '**/*.test.js', '**/*.spec.ts', '**/*.spec.js'];
+  public async discoverTests(): Promise<void> {
+    const patterns = ['**/*.test.ts', '**/*.test.js', '**/*.tests.ts', '**/*.tests.js', '**/*.spec.ts', '**/*.spec.js'];
     const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
 
     if (!workspaceFolder) {
@@ -137,7 +137,7 @@ export class TestController {
   /**
    * Dispose resources
    */
-  dispose(): void {
+  public dispose(): void {
     this.controller.dispose();
     this.fileWatcher.dispose();
   }

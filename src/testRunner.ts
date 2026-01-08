@@ -21,7 +21,7 @@ export class TestRunner implements vscode.Disposable {
   private outputChannel: vscode.OutputChannel;
   private workspaceRoot: string;
 
-  constructor(workspaceRoot: string) {
+  public constructor(workspaceRoot: string) {
     this.workspaceRoot = workspaceRoot;
     this.outputChannel = vscode.window.createOutputChannel('Web Test Runner');
   }
@@ -29,44 +29,44 @@ export class TestRunner implements vscode.Disposable {
   /**
    * Show output channel
    */
-  showOutput(): void {
+  public showOutput(): void {
     this.outputChannel.show(true);
   }
 
   /**
    * Run all tests
    */
-  async runAllTests(): Promise<TestRunResult> {
+  public async runAllTests(): Promise<TestRunResult> {
     this.outputChannel.clear();
     this.outputChannel.appendLine('Running all tests...\n');
 
-    return this.executeWtr(undefined);
+    return this.executeWebTestRunner(undefined);
   }
 
   /**
    * Run a specific test file
    */
-  async runTestFile(filePath: string): Promise<TestRunResult> {
+  public async runTestFile(filePath: string): Promise<TestRunResult> {
     this.outputChannel.clear();
     this.outputChannel.appendLine(`Running test: ${path.basename(filePath)}\n`);
 
-    return this.executeWtr(filePath);
+    return this.executeWebTestRunner(filePath);
   }
 
   /**
    * Run a specific test
    */
-  async runSingleTest(filePath: string, testName: string): Promise<TestRunResult> {
+  public async runSingleTest(filePath: string, testName: string): Promise<TestRunResult> {
     this.outputChannel.clear();
     this.outputChannel.appendLine(`Running test: ${testName}\n`);
 
-    return this.executeWtr(filePath, testName);
+    return this.executeWebTestRunner(filePath, testName);
   }
 
   /**
    * Execute web-test-runner command
    */
-  private executeWtr(
+  private executeWebTestRunner(
     filePath?: string,
     testName?: string
   ): Promise<TestRunResult> {
@@ -162,7 +162,7 @@ export class TestRunner implements vscode.Disposable {
   /**
    * Dispose resources
    */
-  dispose(): void {
+  public dispose(): void {
     this.outputChannel.dispose();
   }
 }

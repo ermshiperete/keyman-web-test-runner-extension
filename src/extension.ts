@@ -9,6 +9,7 @@ let testRunner: TestRunner;
  * Activate the extension
  */
 export function activate(context: vscode.ExtensionContext): void {
+  // Public function - exported
   console.log('web-test-runner-extension is now active');
 
   const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
@@ -34,6 +35,7 @@ export function activate(context: vscode.ExtensionContext): void {
  * Deactivate the extension
  */
 export function deactivate(): void {
+  // Public function - exported
   if (testController) {
     testController.dispose();
   }
