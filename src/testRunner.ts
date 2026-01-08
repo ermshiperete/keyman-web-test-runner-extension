@@ -17,7 +17,7 @@ export interface TestRunResult {
 /**
  * Manages running web-test-runner tests
  */
-export class TestRunner {
+export class TestRunner implements vscode.Disposable {
   private outputChannel: vscode.OutputChannel;
   private workspaceRoot: string;
 
@@ -157,5 +157,12 @@ export class TestRunner {
       output,
       errors
     };
+  }
+
+  /**
+   * Dispose resources
+   */
+  dispose(): void {
+    this.outputChannel.dispose();
   }
 }

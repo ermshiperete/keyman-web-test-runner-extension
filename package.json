@@ -17,55 +17,7 @@
     "workspaceContains:**/*.spec.js"
   ],
   "main": "./dist/extension.js",
-  "contributes": {
-    "commands": [
-      {
-        "command": "web-test-runner-extension.runAll",
-        "title": "Run All Tests",
-        "icon": "$(run-all)"
-      },
-      {
-        "command": "web-test-runner-extension.refreshTests",
-        "title": "Refresh Tests",
-        "icon": "$(refresh)"
-      },
-      {
-        "command": "web-test-runner-extension.runTest",
-        "title": "Run Test",
-        "icon": "$(run)"
-      }
-    ],
-    "views": {
-      "test": [
-        {
-          "id": "webTestRunnerExplorer",
-          "name": "Web Test Runner",
-          "when": "workspaceFolder != undefined"
-        }
-      ]
-    },
-    "menus": {
-      "view/title": [
-        {
-          "command": "web-test-runner-extension.runAll",
-          "when": "view == webTestRunnerExplorer",
-          "group": "navigation"
-        },
-        {
-          "command": "web-test-runner-extension.refreshTests",
-          "when": "view == webTestRunnerExplorer",
-          "group": "navigation"
-        }
-      ],
-      "view/item/context": [
-        {
-          "command": "web-test-runner-extension.runTest",
-          "when": "view == webTestRunnerExplorer",
-          "group": "inline"
-        }
-      ]
-    }
-  },
+  "contributes": {},
   "scripts": {
     "vscode:prepublish": "npm run package",
     "compile": "webpack",

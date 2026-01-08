@@ -44,12 +44,13 @@ This document defines the style, structure, and commands for agent work in this 
 ## Extension Features
 
 ### Test Explorer
+- Uses VS Code's native Test Explorer API (TestController)
 - Discovers test files matching `*.test.ts`, `*.test.js`, `*.spec.ts`, `*.spec.js`
-- Tree view in Testing sidebar
-- Run all tests or individual test files
+- Integrated tree view in Testing sidebar
+- Run tests directly from VS Code's test interface
 - Auto-refresh when test files change
 
 ### Key Modules
-- `testExplorer.ts` - Tree data provider for test discovery and display
-- `testRunner.ts` - Executes web-test-runner commands
-- `extension.ts` - Main extension entry point and command handlers
+- `testController.ts` - Implements TestController for test discovery and execution
+- `testRunner.ts` - Executes web-test-runner commands and parses results
+- `extension.ts` - Main extension entry point and lifecycle management

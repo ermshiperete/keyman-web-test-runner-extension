@@ -32,45 +32,43 @@ This VS Code extension provides an integrated test explorer for `web-test-runner
 
 #### `extension.ts`
 Main entry point that:
-- Initializes the test runner and explorer
-- Registers VS Code commands
-- Sets up file watchers for test file changes
-- Manages extension lifecycle
+- Initializes the test controller and runner
+- Manages extension lifecycle and subscriptions
+- Handles activation and deactivation
 
-#### `testExplorer.ts` (TestExplorerProvider)
-Implements the tree data provider:
-- Discovers test files in workspace
-- Builds the tree structure for display
-- Handles tree item rendering and icons
-- Provides refresh capabilities
+#### `testController.ts` (TestController)
+Implements VS Code's Test Controller API:
+- Discovers test files in workspace using file globbing
+- Manages test item creation and population
+- Registers test run and resolve handlers
+- Watches for file system changes and auto-refreshes tests
 
 **Key Methods:**
-- `refresh()` - Rediscover and refresh test tree
 - `discoverTests()` - Scan workspace for test files
-- `getTreeItem(element)` - Format items for display
-- `getChildren(element)` - Return child items in tree
+- `createTestItem(file)` - Create test item for file
+- `dispose()` - Clean up resources
 
 #### `testRunner.ts` (TestRunner)
 Manages test execution:
-- Spawns web-test-runner processes
-- Captures and streams output
-- Parses test results
+- Spawns web-test-runner processes via npx
+- Captures and streams output to output channel
+- Parses test results (pass/fail counts)
 - Provides error handling
 
 **Key Methods:**
 - `runAllTests()` - Execute all discovered tests
 - `runTestFile(filePath)` - Execute specific test file
-- `runSingleTest(filePath, testName)` - Execute single test
+- `runSingleTest(filePath, testName)` - Execute single test by name
 
-## Commands
+## Test Execution
 
-### Registered Commands
+VS Code's native Test Explorer UI provides built-in commands:
+- **Run** - Execute selected test file
+- **Run All** - Execute all discovered tests
+- **Refresh** - Rescan workspace for test files
+- **Stop** - Cancel running tests
 
-| Command ID | Title | Shortcut | Description |
-|---|---|---|---|
-| `web-test-runner-extension.runAll` | Run All Tests | - | Execute all discovered tests |
-| `web-test-runner-extension.refreshTests` | Refresh Tests | - | Rescan workspace for test files |
-| `web-test-runner-extension.runTest` | Run Test | - | Execute selected test file |
+No custom commands required; uses standard VS Code testing interface.
 
 ## Activation Events
 
