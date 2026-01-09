@@ -9,6 +9,7 @@
       ],
       "presentation": {
         "reveal": "never",
+        "revealProblems": "onProblem",
         "group": "watchers"
       },
       "group": {
@@ -25,6 +26,7 @@
       "label": "npm: watch:esbuild",
       "presentation": {
         "group": "watch",
+        "revealProblems": "onProblem",
         "reveal": "never"
       }
     },
@@ -37,6 +39,7 @@
       "label": "npm: watch:tsc",
       "presentation": {
         "group": "watch",
+        "revealProblems": "onProblem",
         "reveal": "never"
       }
     },
@@ -47,6 +50,7 @@
       "isBackground": true,
       "presentation": {
         "reveal": "never",
+        "revealProblems": "onProblem",
         "group": "watchers"
       },
       "group": "build"

@@ -1,8 +1,30 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as cp from 'child_process';
 import { TestRunner } from './testRunner';
 import { ConfigLoader } from './configLoader';
+
+interface TestItem {
+  title: string;
+  fullTitle: string;
+  state?: 'passed' | 'failed' | 'pending';
+  children?: TestItem[];
+}
+
+interface HierarchicalReport {
+  stats: {
+    suites: number;
+    tests: number;
+    passes: number;
+    pending: number;
+    failures: number;
+    start?: string;
+    end?: string;
+    duration?: number;
+  };
+  root: TestItem;
+}
 
 /**
  * Manages test discovery and execution using VS Code's Test Controller API
@@ -17,7 +39,9 @@ export class TestController implements vscode.Disposable {
     this.workspaceRoot = workspaceRoot;
     this.testRunner = testRunner;
     this.controller = vscode.tests.createTestController('webTestRunner', 'Web Test Runner');
-    this.fileWatcher = vscode.workspace.createFileSystemWatcher('**/*.{test,tests,spec}.{ts,js}');
+    this.fileWatcher = vscode.workspace.createFileSystemWatcher(
+      '**/*.{test,tests,spec}.{ts,js}'
+    );
 
     this.setupFileWatcher();
     this.setupTestController();
@@ -53,7 +77,10 @@ export class TestController implements vscode.Disposable {
     };
 
     // Run handler
-    const runHandler = async (request: vscode.TestRunRequest, cancellation: vscode.CancellationToken) => {
+    const runHandler = async (
+      request: vscode.TestRunRequest,
+      cancellation: vscode.CancellationToken
+    ) => {
       const run = this.controller.createTestRun(request);
 
       try {
@@ -110,7 +137,7 @@ export class TestController implements vscode.Disposable {
 
     // Try to load from config file
     const configFiles = await ConfigLoader.findConfigFiles();
-    configFiles.forEach(async configPath => {
+    configFiles.forEach(async (configPath) => {
       await this.discoverFromConfig(configPath, workspaceFolder);
     });
   }
@@ -118,7 +145,11 @@ export class TestController implements vscode.Disposable {
   /**
    * Discover tests from web-test-runner.config.mjs
    */
-  private async discoverFromConfig(configPath: string, workspaceFolder: vscode.WorkspaceFolder): Promise<void> {
+  private async discoverFromConfig(
+    configPath: string,
+    workspaceFolder: vscode.WorkspaceFolder
+  ): Promise<void> {
+    console.log(`Discovering tests from config: ${configPath}`);
     const config = await ConfigLoader.loadConfig(configPath);
 
     // Process groups if they exist
@@ -133,18 +164,21 @@ export class TestController implements vscode.Disposable {
 
         // Add test files to group
         for (const filePattern of group.files) {
-          const files = await vscode.workspace.findFiles(
-              filePattern,
-              '**/node_modules/**'
-          );
+          const files = await vscode.workspace.findFiles(filePattern, '**/node_modules/**');
           for (const fileUri of files) {
             const testItem = this.controller.createTestItem(
               `test:${fileUri.path}`,
               path.basename(fileUri.path),
               fileUri
             );
-            testItem.range = new vscode.Range(new vscode.Position(0, 0), new vscode.Position(0, 0));
+            testItem.range = new vscode.Range(
+              new vscode.Position(0, 0),
+              new vscode.Position(0, 0)
+            );
             groupItem.children.add(testItem);
+
+            // Discover tests from file using mocha with JsonHierarchicalReporter
+            await this.discoverTestsFromFile(fileUri, testItem);
           }
         }
 
@@ -165,19 +199,97 @@ export class TestController implements vscode.Disposable {
   }
 
   /**
-   * Discover tests by globbing filesystem
+   * Discover tests from a test file using mocha with JsonHierarchicalReporter
    */
-  private async discoverFromGlob(workspaceFolder: vscode.WorkspaceFolder): Promise<void> {
-    const patterns = ['**/*.test.ts', '**/*.test.js', '**/*.tests.ts', '**/*.tests.js', '**/*.spec.ts', '**/*.spec.js'];
+  private async discoverTestsFromFile(
+    fileUri: vscode.Uri,
+    fileTestItem: vscode.TestItem
+  ): Promise<void> {
+    try {
+      const report = await this.runMochaForFile(fileUri.fsPath);
+      if (report && report.root && report.root.children) {
+        this.populateTestItemsFromReport(fileTestItem, report.root);
+      }
+    } catch (error) {
+      console.error(`Failed to discover tests from ${fileUri.fsPath}:`, error);
+    }
+  }
 
-    for (const pattern of patterns) {
-      const files = await vscode.workspace.findFiles(
-        pattern,
-        '**/node_modules/**'
+  /**
+   * Run mocha on a test file and get the hierarchical report
+   */
+  private runMochaForFile(filePath: string): Promise<HierarchicalReport | null> {
+    return new Promise((resolve) => {
+      try {
+        const mochaPath = path.join(this.workspaceRoot, 'node_modules/.bin/mocha');
+        const reporterPath = path.join(__dirname, '../out/mocha-reporter/json-hierarchical.js');
+
+        const process = cp.spawn(
+          'node',
+          [mochaPath, '--dry-run', '--require', reporterPath, '--reporter', 'json-hierarchical', filePath],
+          {
+            cwd: this.workspaceRoot,
+            stdio: ['pipe', 'pipe', 'pipe'],
+          }
+        );
+
+        let output = '';
+        let errorOutput = '';
+
+        process.stdout?.on('data', (data) => {
+          output += data.toString();
+        });
+
+        process.stderr?.on('data', (data) => {
+          errorOutput += data.toString();
+        });
+
+        process.on('close', () => {
+          try {
+            // Extract JSON from output (mocha may print other text)
+            const jsonMatch = output.match(/\{[\s\S]*\}/);
+            if (jsonMatch) {
+              const report = JSON.parse(jsonMatch[0]) as HierarchicalReport;
+              resolve(report);
+            } else {
+              resolve(null);
+            }
+          } catch (parseError) {
+            console.error(`Failed to parse mocha output:`, parseError);
+            resolve(null);
+          }
+        });
+      } catch (error) {
+        console.error(`Failed to run mocha:`, error);
+        resolve(null);
+      }
+    });
+  }
+
+  /**
+   * Populate test items from mocha hierarchical report
+   */
+  private populateTestItemsFromReport(parentItem: vscode.TestItem, reportItem: TestItem): void {
+    if (!reportItem.children) {
+      return;
+    }
+
+    for (const child of reportItem.children) {
+      const childId = `${parentItem.id}::${child.fullTitle}`;
+      const childTestItem = this.controller.createTestItem(
+        childId,
+        child.title,
+        parentItem.uri
       );
+      childTestItem.range = new vscode.Range(
+        new vscode.Position(0, 0),
+        new vscode.Position(0, 0)
+      );
+      parentItem.children.add(childTestItem);
 
-      for (const file of files) {
-        this.createTestItem(file);
+      // Recursively add nested suites
+      if (child.children && child.children.length > 0) {
+        this.populateTestItemsFromReport(childTestItem, child);
       }
     }
   }
