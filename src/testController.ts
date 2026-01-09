@@ -39,6 +39,11 @@ export class TestController implements vscode.Disposable {
     this.fileWatcher.onDidChange(() => this.discoverTests());
   }
 
+  private runFuncOnTest(test: vscode.TestItem, func: (test: vscode.TestItem, ...args: any[]) => void, args: any[] = []): void {
+    func(test, ...args);
+    test.children.forEach((child) => this.runFuncOnTest(child, func, args));
+  }
+
   /**
    * Setup test controller handlers
    */
@@ -67,25 +72,39 @@ export class TestController implements vscode.Disposable {
       const run = this.controller.createTestRun(request);
 
       try {
-        for (const test of request.include || []) {
+        let allTests: vscode.TestItem[];
+        if (request.include && request.include.length > 0) {
+          allTests = Array.from(request.include);
+        } else {
+          allTests = Array.from(this.controller.items).map(([, test]) => test);
+          for (const test of allTests) {
+            this.runFuncOnTest(test, run.started);
+          }
+        }
+
+        for (const test of allTests) {
           if (cancellation.isCancellationRequested) {
             break;
           }
 
           const filePath = (test.id.startsWith('test:') || test.id.startsWith('file:')) ? test.id.substring(5) : test.id;
-          run.started(test);
+          this.runFuncOnTest(test, run.started);
 
           try {
-            const result = await this.testRunner.runTestFile(filePath);
+            const result = await this.testRunner.runTestFile(test, filePath);
 
             if (result.passed) {
-              run.passed(test);
+              this.runFuncOnTest(test, run.passed);
             } else {
               const message = new vscode.TestMessage(
                 `Test failed: ${result.failedCount} failure(s)`
               );
               message.actualOutput = result.output;
-              run.failed(test, [message]);
+              if (test.children.size === 1) {
+                this.runFuncOnTest(test, run.failed, [message]);
+              } else {
+                run.failed(test, [message]);
+              }
             }
           } catch (error) {
             const errorMsg = error instanceof Error ? error.message : String(error);
@@ -145,45 +164,60 @@ export class TestController implements vscode.Disposable {
     // Process groups if they exist
     if (config.groups && config.groups.length > 0) {
       for (const group of config.groups) {
+        const sourceFileUri = this.getSourceFileUri(workspaceFolder.uri);
         const groupItem = this.controller.createTestItem(
           `group:${group.name}`,
           group.name,
-          workspaceFolder.uri
+          sourceFileUri
         );
         groupItem.canResolveChildren = false;
+        this.testRunner.addTest(groupItem, configPath);
+        this.controller.items.add(groupItem);
 
         // Add test files to group
-        for (const filePattern of group.files) {
-          const files = await vscode.workspace.findFiles(filePattern, '**/node_modules/**');
-          for (const fileUri of files) {
-            const testItem = this.controller.createTestItem(
-              `file:${fileUri.path}`,
-              path.basename(fileUri.path),
-              fileUri
-            );
-            testItem.range = new vscode.Range(
-              new vscode.Position(0, 0),
-              new vscode.Position(0, 0)
-            );
-            groupItem.children.add(testItem);
-
-            // Discover tests from file using mocha with JsonHierarchicalReporter
-            await this.discoverTestsFromFile(fileUri, testItem);
-          }
-        }
-
-        this.controller.items.add(groupItem);
+        await this.discoverTestsFromGroup(groupItem, configPath, group.files);
       }
     }
 
     if (config.files && config.files.length > 0) {
       // Process top-level files
-      for (const filePath of config.files) {
-        const fullPath = path.resolve(this.workspaceRoot, filePath);
-        if (fs.existsSync(fullPath)) {
-          const fileUri = vscode.Uri.file(fullPath);
-          this.createTestItem(fileUri);
-        }
+      const sourceFileUri = this.getSourceFileUri(workspaceFolder.uri);
+      const defaultGroup = this.controller.createTestItem(
+        `group:default`,
+        'Default',
+        sourceFileUri
+      );
+      defaultGroup.canResolveChildren = false;
+      this.testRunner.addTest(defaultGroup, configPath);
+      this.controller.items.add(defaultGroup);
+
+      await this.discoverTestsFromGroup(defaultGroup, configPath, config.files);
+    }
+  }
+
+  private async discoverTestsFromGroup(
+    groupItem: vscode.TestItem,
+    configPath: string,
+    files: string[]
+  ): Promise<void> {
+    for (const filePattern of files) {
+      const files = await vscode.workspace.findFiles(filePattern, '**/node_modules/**');
+      for (const fileUri of files) {
+        const sourceFileUri = this.getSourceFileUri(fileUri);
+        const testItem = this.controller.createTestItem(
+          `file:${fileUri.path}`,
+          path.basename(fileUri.path),
+          sourceFileUri
+        );
+        testItem.range = new vscode.Range(
+          new vscode.Position(0, 0),
+          new vscode.Position(0, 0)
+        );
+        groupItem.children.add(testItem);
+        this.testRunner.addTest(testItem, configPath);
+
+        // Discover tests from file using mocha with JsonHierarchicalReporter
+        await this.discoverTestsFromFile(fileUri, testItem, configPath);
       }
     }
   }
@@ -193,12 +227,13 @@ export class TestController implements vscode.Disposable {
    */
   private async discoverTestsFromFile(
     fileUri: vscode.Uri,
-    fileTestItem: vscode.TestItem
+    fileTestItem: vscode.TestItem,
+    configPath: string
   ): Promise<void> {
     try {
       const report = await this.runMochaForFile(fileUri.fsPath);
       if (report) {
-        this.populateTestItemsFromReport(fileTestItem, report.root);
+        this.populateTestItemsFromReport(fileTestItem, report.root, configPath);
       }
     } catch (error) {
       console.error(`Failed to discover tests from ${fileUri.fsPath}:`, error);
@@ -227,25 +262,44 @@ export class TestController implements vscode.Disposable {
   }
 
   /**
+   * Convert test file path to source file path
+   * Replaces /build/ with /src/ and changes .mjs extension to .ts
+   */
+  private getSourceFileUri(testFileUri: vscode.Uri): vscode.Uri {
+    // web/build/test/dom/cases/dom-utils/cookieSerializer.tests.mjs
+    // web/src/test/auto/dom/cases/dom-utils/cookieSerializer.tests.ts
+    let sourcePath = testFileUri.fsPath.replace('/build/test/', '/src/test/auto/');
+    sourcePath = sourcePath.replace(/\.mjs$/, '.ts');
+    return vscode.Uri.file(sourcePath);
+  }
+
+  /**
    * Populate test items from mocha hierarchical report
    */
-  private populateTestItemsFromReport(parentItem: vscode.TestItem, reportItem: SuiteResult): void {
+  private populateTestItemsFromReport(
+    parentItem: vscode.TestItem,
+    reportItem: SuiteResult,
+    configPath: string
+  ): void {
     if (!reportItem.tests) {
       return;
     }
+
+    const sourceFileUri = this.getSourceFileUri(parentItem.uri!);
 
     for (const test of reportItem.tests) {
       const childId = `${parentItem.id}::${test.fullTitle}`;
       const childTestItem = this.controller.createTestItem(
         childId,
         test.title,
-        parentItem.uri
+        sourceFileUri
       );
       childTestItem.range = new vscode.Range(
         new vscode.Position(0, 0),
         new vscode.Position(0, 0)
       );
       parentItem.children.add(childTestItem);
+      this.testRunner.addTest(childTestItem, configPath);
     }
   }
 
@@ -274,7 +328,8 @@ export class TestController implements vscode.Disposable {
       }
     }
 
-    const testItem = this.controller.createTestItem(testId, label, file);
+    const sourceFileUri = this.getSourceFileUri(file);
+    const testItem = this.controller.createTestItem(testId, label, sourceFileUri);
     testItem.range = new vscode.Range(new vscode.Position(0, 0), new vscode.Position(0, 0));
 
     this.controller.items.add(testItem);

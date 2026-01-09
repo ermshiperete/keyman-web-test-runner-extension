@@ -20,6 +20,7 @@ export interface TestRunResult {
 export class TestRunner implements vscode.Disposable {
   private outputChannel: vscode.OutputChannel;
   private workspaceRoot: string;
+  private testItemToConfigMap: Map<string, string> = new Map();
 
   public constructor(workspaceRoot: string) {
     this.workspaceRoot = workspaceRoot;
@@ -36,37 +37,51 @@ export class TestRunner implements vscode.Disposable {
   /**
    * Run all tests
    */
-  public async runAllTests(): Promise<TestRunResult> {
+  public async runAllTests(test: vscode.TestItem): Promise<TestRunResult> {
     this.outputChannel.clear();
     this.outputChannel.appendLine('Running all tests...\n');
 
-    return this.executeWebTestRunner(undefined);
+    return this.executeWebTestRunner(test);
   }
 
   /**
    * Run a specific test file
    */
-  public async runTestFile(filePath: string): Promise<TestRunResult> {
+  public async runTestFile(test: vscode.TestItem, filePath: string): Promise<TestRunResult> {
     this.outputChannel.clear();
     this.outputChannel.appendLine(`Running test: ${path.basename(filePath)}\n`);
 
-    return this.executeWebTestRunner(filePath);
+    return this.executeWebTestRunner(test, filePath);
   }
 
   /**
    * Run a specific test
    */
-  public async runSingleTest(filePath: string, testName: string): Promise<TestRunResult> {
+  public async runSingleTest(test: vscode.TestItem, testName: string): Promise<TestRunResult> {
     this.outputChannel.clear();
     this.outputChannel.appendLine(`Running test: ${testName}\n`);
 
-    return this.executeWebTestRunner(filePath, testName);
+    return this.executeWebTestRunner(test, undefined, testName);
   }
 
+  public addTest(test: vscode.TestItem, configPath: string): void {
+    this.testItemToConfigMap.set(test.id, configPath);
+  }
+
+  private getGroup(test: vscode.TestItem | undefined): string {
+    if (!test) {
+      return '';
+    }
+    if (test.id.startsWith('group:')) {
+      return test.id.substring(6);
+    }
+    return this.getGroup(test.parent);
+  }
   /**
    * Execute web-test-runner command
    */
   private executeWebTestRunner(
+    test: vscode.TestItem,
     filePath?: string,
     testName?: string
   ): Promise<TestRunResult> {
@@ -74,15 +89,24 @@ export class TestRunner implements vscode.Disposable {
       try {
         const args = ['web-test-runner'];
 
-        if (filePath) {
-          args.push(filePath);
+        if (this.testItemToConfigMap.has(test.id)) {
+          args.push('--config', this.testItemToConfigMap.get(test.id)!);
         }
 
-        if (testName) {
-          args.push('--grep', testName);
+        const group = this.getGroup(test);
+        if (group) {
+          args.push('--group', group);
         }
 
-        args.push('--node-resolve', '--coverage');
+        // if (filePath) {
+        //   args.push('--files', filePath);
+        // }
+
+        // if (testName) {
+        //   args.push('--grep', testName);
+        // }
+
+        // args.push('--node-resolve', '--coverage');
 
         const process = cp.spawn('npx', args, {
           cwd: this.workspaceRoot,
@@ -133,9 +157,34 @@ export class TestRunner implements vscode.Disposable {
   ): TestRunResult {
     const errors: string[] = [];
 
+    // Find the test run
+    const runningTestsSplits = output.split(/Running tests.../g);
+    if (!runningTestsSplits) {
+      return {
+        passed: false,
+        testCount: 0,
+        passedCount: 0,
+        failedCount: 0,
+        output: '',
+        errors: ['Test run not found']
+      };
+    }
+
+    const lastOutput = runningTestsSplits.at(-1);
+    if (!lastOutput) {
+      return {
+        passed: false,
+        testCount: 0,
+        passedCount: 0,
+        failedCount: 0,
+        output: '',
+        errors: ['Test run not found']
+      };
+    }
+
     // Basic parsing of output
-    const passMatch = output.match(/(\d+) passed/);
-    const failMatch = output.match(/(\d+) failed/);
+    const passMatch = lastOutput.match(/(\d+) passed/);
+    const failMatch = lastOutput.match(/(\d+) failed/);
 
     const passedCount = passMatch ? parseInt(passMatch[1], 10) : 0;
     const failedCount = failMatch ? parseInt(failMatch[1], 10) : 0;
