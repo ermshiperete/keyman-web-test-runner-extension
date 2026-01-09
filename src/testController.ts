@@ -1,30 +1,10 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
-import * as cp from 'child_process';
+import Mocha from 'mocha';
 import { TestRunner } from './testRunner';
 import { ConfigLoader } from './configLoader';
-
-interface TestItem {
-  title: string;
-  fullTitle: string;
-  state?: 'passed' | 'failed' | 'pending';
-  children?: TestItem[];
-}
-
-interface HierarchicalReport {
-  stats: {
-    suites: number;
-    tests: number;
-    passes: number;
-    pending: number;
-    failures: number;
-    start?: string;
-    end?: string;
-    duration?: number;
-  };
-  root: TestItem;
-}
+import { HierarchicalReport, HierarchicalReporter, SuiteResult } from './mocha-reporter/hierarchical';
 
 /**
  * Manages test discovery and execution using VS Code's Test Controller API
@@ -34,6 +14,7 @@ export class TestController implements vscode.Disposable {
   private testRunner: TestRunner;
   private workspaceRoot: string;
   private fileWatcher: vscode.FileSystemWatcher;
+  private mocha: Mocha;
 
   public constructor(workspaceRoot: string, testRunner: TestRunner) {
     this.workspaceRoot = workspaceRoot;
@@ -45,6 +26,8 @@ export class TestController implements vscode.Disposable {
 
     this.setupFileWatcher();
     this.setupTestController();
+
+    this.mocha = new Mocha({ reporterOptions: { dryRun: true } });
   }
 
   /**
@@ -89,7 +72,7 @@ export class TestController implements vscode.Disposable {
             break;
           }
 
-          const filePath = test.id.startsWith('test:') ? test.id.substring(5) : test.id;
+          const filePath = (test.id.startsWith('test:') || test.id.startsWith('file:')) ? test.id.substring(5) : test.id;
           run.started(test);
 
           try {
@@ -117,6 +100,13 @@ export class TestController implements vscode.Disposable {
     this.controller.createRunProfile(
       'Web Test Runner',
       vscode.TestRunProfileKind.Run,
+      runHandler,
+      true
+    );
+
+    this.controller.createRunProfile(
+      'Web Test Runner (Debug)',
+      vscode.TestRunProfileKind.Debug,
       runHandler,
       true
     );
@@ -167,7 +157,7 @@ export class TestController implements vscode.Disposable {
           const files = await vscode.workspace.findFiles(filePattern, '**/node_modules/**');
           for (const fileUri of files) {
             const testItem = this.controller.createTestItem(
-              `test:${fileUri.path}`,
+              `file:${fileUri.path}`,
               path.basename(fileUri.path),
               fileUri
             );
@@ -207,7 +197,7 @@ export class TestController implements vscode.Disposable {
   ): Promise<void> {
     try {
       const report = await this.runMochaForFile(fileUri.fsPath);
-      if (report && report.root && report.root.children) {
+      if (report) {
         this.populateTestItemsFromReport(fileTestItem, report.root);
       }
     } catch (error) {
@@ -218,67 +208,37 @@ export class TestController implements vscode.Disposable {
   /**
    * Run mocha on a test file and get the hierarchical report
    */
-  private runMochaForFile(filePath: string): Promise<HierarchicalReport | null> {
+  private async runMochaForFile(filePath: string): Promise<HierarchicalReport | null> {
+    console.log(`*** Running mocha for ${filePath}`);
     return new Promise((resolve) => {
-      try {
-        const mochaPath = path.join(this.workspaceRoot, 'node_modules/.bin/mocha');
-        const reporterPath = path.join(__dirname, '../out/mocha-reporter/json-hierarchical.js');
-
-        const process = cp.spawn(
-          'node',
-          [mochaPath, '--dry-run', '--require', reporterPath, '--reporter', 'json-hierarchical', filePath],
-          {
-            cwd: this.workspaceRoot,
-            stdio: ['pipe', 'pipe', 'pipe'],
-          }
-        );
-
-        let output = '';
-        let errorOutput = '';
-
-        process.stdout?.on('data', (data) => {
-          output += data.toString();
-        });
-
-        process.stderr?.on('data', (data) => {
-          errorOutput += data.toString();
-        });
-
-        process.on('close', () => {
-          try {
-            // Extract JSON from output (mocha may print other text)
-            const jsonMatch = output.match(/\{[\s\S]*\}/);
-            if (jsonMatch) {
-              const report = JSON.parse(jsonMatch[0]) as HierarchicalReport;
-              resolve(report);
-            } else {
-              resolve(null);
-            }
-          } catch (parseError) {
-            console.error(`Failed to parse mocha output:`, parseError);
-            resolve(null);
-          }
-        });
-      } catch (error) {
-        console.error(`Failed to run mocha:`, error);
+      this.mocha.reporter(HierarchicalReporter, {
+        setResult: (r: HierarchicalReport) => {
+          console.log(`*** Mocha result for ${filePath}:`, JSON.stringify(r, null, 2));
+          resolve(r);
+        }
+      });
+      // this.mocha.unloadFiles();
+      this.mocha.addFile(filePath);
+      this.mocha.run(() => {
+        console.log(`*** Mocha run complete without result for ${filePath}`);
         resolve(null);
-      }
+      });
     });
   }
 
   /**
    * Populate test items from mocha hierarchical report
    */
-  private populateTestItemsFromReport(parentItem: vscode.TestItem, reportItem: TestItem): void {
-    if (!reportItem.children) {
+  private populateTestItemsFromReport(parentItem: vscode.TestItem, reportItem: SuiteResult): void {
+    if (!reportItem.tests) {
       return;
     }
 
-    for (const child of reportItem.children) {
-      const childId = `${parentItem.id}::${child.fullTitle}`;
+    for (const test of reportItem.tests) {
+      const childId = `${parentItem.id}::${test.fullTitle}`;
       const childTestItem = this.controller.createTestItem(
         childId,
-        child.title,
+        test.title,
         parentItem.uri
       );
       childTestItem.range = new vscode.Range(
@@ -286,11 +246,6 @@ export class TestController implements vscode.Disposable {
         new vscode.Position(0, 0)
       );
       parentItem.children.add(childTestItem);
-
-      // Recursively add nested suites
-      if (child.children && child.children.length > 0) {
-        this.populateTestItemsFromReport(childTestItem, child);
-      }
     }
   }
 

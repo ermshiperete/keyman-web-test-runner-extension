@@ -10,7 +10,7 @@ const {
   EVENT_TEST_PENDING
 } = Mocha.Runner.constants;
 
-interface TestResult {
+export interface TestResult {
   title: string;
   fullTitle: string;
   state: 'passed' | 'failed' | 'pending';
@@ -21,14 +21,14 @@ interface TestResult {
   };
 }
 
-interface SuiteResult {
+export interface SuiteResult {
   title: string;
   fullTitle: string;
   suites: SuiteResult[];
   tests: TestResult[];
 }
 
-interface HierarchicalReport {
+export interface HierarchicalReport {
   stats: {
     suites: number;
     tests: number;
@@ -42,13 +42,15 @@ interface HierarchicalReport {
   root: SuiteResult;
 }
 
-export class JsonHierarchicalReporter extends Mocha.reporters.Base {
+export class HierarchicalReporter extends Mocha.reporters.Base {
   private suiteStack: SuiteResult[] = [];
   private rootSuite: SuiteResult;
   private suiteCount = 0;
+  private setResult: (report: HierarchicalReport) => void;
 
   constructor(runner: Mocha.Runner, options?: Mocha.MochaOptions) {
     super(runner, options);
+    this.setResult = options?.reporterOptions?.setResult ?? (() => {});
     this.rootSuite = {
       title: '',
       fullTitle: '',
@@ -115,7 +117,7 @@ export class JsonHierarchicalReporter extends Mocha.reporters.Base {
         root: this.rootSuite
       };
 
-      console.log(JSON.stringify(report, null, 2));
+      this.setResult(report);
     });
   }
 
