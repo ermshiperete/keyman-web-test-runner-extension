@@ -4,7 +4,8 @@ import * as path from 'path';
 import Mocha from 'mocha';
 import { TestRunner } from './testRunner';
 import { ConfigLoader } from './configLoader';
-import { HierarchicalReport, HierarchicalReporter, SuiteResult } from './mocha-reporter/hierarchical';
+import { SuiteResult } from './mocha-reporter/hierarchical';
+import { discoverTestsWithMocha } from './testDiscovery';
 
 /**
  * Manages test discovery and execution using VS Code's Test Controller API
@@ -233,7 +234,7 @@ export class TestController implements vscode.Disposable {
     try {
       const report = await this.runMochaForFile(fileUri.fsPath);
       if (report) {
-        this.populateTestItemsFromReport(fileTestItem, report.root, configPath);
+        // this.populateTestItemsFromReport(fileTestItem, report.root, configPath);
       }
     } catch (error) {
       console.error(`Failed to discover tests from ${fileUri.fsPath}:`, error);
@@ -243,22 +244,27 @@ export class TestController implements vscode.Disposable {
   /**
    * Run mocha on a test file and get the hierarchical report
    */
-  private async runMochaForFile(filePath: string): Promise<HierarchicalReport | null> {
-    console.log(`*** Running mocha for ${filePath}`);
-    return new Promise((resolve) => {
-      this.mocha.reporter(HierarchicalReporter, {
-        setResult: (r: HierarchicalReport) => {
-          console.log(`*** Mocha result for ${filePath}:`, JSON.stringify(r, null, 2));
-          resolve(r);
-        }
-      });
-      // this.mocha.unloadFiles();
-      this.mocha.addFile(filePath);
-      this.mocha.run(() => {
-        console.log(`*** Mocha run complete without result for ${filePath}`);
-        resolve(null);
-      });
-    });
+  private async runMochaForFile(filePath: string): Promise<string> {
+    if (!filePath.endsWith('js')) {
+      return '';
+    }
+
+    return await discoverTestsWithMocha(this.workspaceRoot, filePath);
+    // console.log(`*** Running mocha for ${filePath}`);
+    // return new Promise((resolve) => {
+    //   this.mocha.reporter(HierarchicalReporter, {
+    //     setResult: (r: HierarchicalReport) => {
+    //       console.log(`*** Mocha result for ${filePath}:`, JSON.stringify(r, null, 2));
+    //       resolve(r);
+    //     }
+    //   });
+    //   // this.mocha.unloadFiles();
+    //   this.mocha.addFile(filePath);
+    //   this.mocha.run(() => {
+    //     console.log(`*** Mocha run complete without result for ${filePath}`);
+    //     resolve(null);
+    //   });
+    // });
   }
 
   /**

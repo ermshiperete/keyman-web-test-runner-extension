@@ -46,11 +46,9 @@ export class HierarchicalReporter extends Mocha.reporters.Base {
   private suiteStack: SuiteResult[] = [];
   private rootSuite: SuiteResult;
   private suiteCount = 0;
-  private setResult: (report: HierarchicalReport) => void;
 
   constructor(runner: Mocha.Runner, options?: Mocha.MochaOptions) {
     super(runner, options);
-    this.setResult = options?.reporterOptions?.setResult ?? (() => {});
     this.rootSuite = {
       title: '',
       fullTitle: '',
@@ -117,7 +115,7 @@ export class HierarchicalReporter extends Mocha.reporters.Base {
         root: this.rootSuite
       };
 
-      this.setResult(report);
+      console.log(JSON.stringify(report, null, 2));
     });
   }
 
@@ -144,3 +142,5 @@ export class HierarchicalReporter extends Mocha.reporters.Base {
     currentSuite.tests.push(testResult);
   }
 }
+
+export default HierarchicalReporter;
