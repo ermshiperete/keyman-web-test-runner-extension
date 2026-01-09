@@ -42,11 +42,36 @@ async function main() {
 			esbuildProblemMatcherPlugin,
 		],
 	});
+
+	// Build mocha reporter
+	const reporterCtx = await esbuild.context({
+		entryPoints: [
+			'src/mocha-reporter/hierarchical.ts'
+		],
+		bundle: true,
+		format: 'cjs',
+		minify: production,
+		sourcemap: !production,
+		sourcesContent: false,
+		platform: 'node',
+		outfile: 'out/mocha-reporter/hierarchical.js',
+		logLevel: 'silent',
+		plugins: [
+			esbuildProblemMatcherPlugin,
+		],
+		footer: {
+			js: 'module.exports = module.exports.default || module.exports;'
+		},
+	});
+
 	if (watch) {
 		await ctx.watch();
+		await reporterCtx.watch();
 	} else {
 		await ctx.rebuild();
+		await reporterCtx.rebuild();
 		await ctx.dispose();
+		await reporterCtx.dispose();
 	}
 }
 
