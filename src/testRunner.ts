@@ -165,7 +165,7 @@ export class TestRunner implements vscode.Disposable {
         testCount: 0,
         passedCount: 0,
         failedCount: 0,
-        output: '',
+        output,
         errors: ['Test run not found']
       };
     }
@@ -177,7 +177,7 @@ export class TestRunner implements vscode.Disposable {
         testCount: 0,
         passedCount: 0,
         failedCount: 0,
-        output: '',
+        output,
         errors: ['Test run not found']
       };
     }
