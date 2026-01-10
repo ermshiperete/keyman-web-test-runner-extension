@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import { TestRunner } from "./testRunner";
 import { TestDiscovery } from "./testDiscovery";
+import { TestResultParser } from "./testResultParser";
 
 /**
  * Manages test discovery and execution using VS Code's Test Controller API
@@ -10,6 +11,7 @@ export class TestController implements vscode.Disposable {
   private testRunner: TestRunner;
   private fileWatcher: vscode.FileSystemWatcher;
   private testDiscovery: TestDiscovery;
+  private testResultParser: TestResultParser;
 
   public constructor(private workspaceRoot: string, testRunner: TestRunner) {
     this.testRunner = testRunner;
@@ -29,6 +31,7 @@ export class TestController implements vscode.Disposable {
       this.controller,
       this.testRunner
     );
+    this.testResultParser = new TestResultParser();
   }
 
   public async discoverTests(): Promise<void> {
@@ -108,7 +111,9 @@ export class TestController implements vscode.Disposable {
             const result = await this.testRunner.runTestFile(test, filePath);
 
             // Parse individual test results
-            const parsedResults = this.parseTestResults(result.output);
+            const parsedResults = this.testResultParser.parseTestResults(
+              result.output
+            );
 
             // If we found individual test results, update them
             if (parsedResults.size > 0) {
@@ -200,43 +205,6 @@ export class TestController implements vscode.Disposable {
       debugHandler,
       true
     );
-  }
-
-  /**
-   * Parse individual test results from web-test-runner output
-   */
-  private parseTestResults(
-    output: string
-  ): Map<string, { passed: boolean; message?: string }> {
-    const results = new Map<string, { passed: boolean; message?: string }>();
-
-    // Strip ANSI control codes
-    const cleanOutput = output.replace(/\x1b\[[0-9;]*m/g, "");
-
-    // Parse test result lines: ✓ test name or 𐄂 test name
-    const testLineRegex = /^\s*([✓𐄂])\s+(.+)$/gm;
-    let match;
-
-    while ((match = testLineRegex.exec(cleanOutput)) !== null) {
-      const passed = match[1] === "✓";
-      const testName = match[2].trim();
-      results.set(testName, { passed });
-    }
-
-    // Parse failure details
-    const failureRegex =
-      /❌\s+(.+?)\n\s+(.+?)(?=\n\s*(?:Chromium|Firefox|Webkit|Finished|$))/gs;
-    let failureMatch;
-
-    while ((failureMatch = failureRegex.exec(cleanOutput)) !== null) {
-      const failedTest = failureMatch[1].trim();
-      const errorMessage = failureMatch[2].trim();
-      if (results.has(failedTest)) {
-        results.get(failedTest)!.message = errorMessage;
-      }
-    }
-
-    return results;
   }
 
   /**

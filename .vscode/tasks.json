@@ -56,6 +56,27 @@
       "group": "build"
     },
     {
+      "type": "npm",
+      "script": "test",
+      "problemMatcher": "$tsc-watch",
+      "label": "npm: test",
+      "group": "build"
+    },
+    {
+      "type": "npm",
+      "script": "compile",
+      "problemMatcher": "$tsc-watch",
+      "label": "npm: compile",
+      "group": "build"
+    },
+    {
+      "type": "npm",
+      "script": "compile-tests",
+      "problemMatcher": "$tsc-watch",
+      "label": "npm: compile-tests",
+      "group": "build"
+    },
+    {
       "label": "tasks: watch-testsX",
       "dependsOn": [
         "npm: watch",

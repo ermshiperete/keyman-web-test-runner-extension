@@ -1,0 +1,6 @@
+{
+  "extension": ["ts"],
+  "spec": "src/test/**/*.test.ts",
+  "exclude": ["src/test/vscode/**/*.ts"],
+  "require": "ts-node/register"
+}
