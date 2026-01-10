@@ -4,7 +4,7 @@ This document defines the style, structure, and commands for agent work in this 
 
 ## Project Overview
 
-**web-test-runner-extension** - A VS Code extension for web-test-runner.
+**keyman-web-test-runner-extension** - A VS Code extension for web-test-runner.
 
 ## Code Style
 

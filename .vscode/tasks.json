@@ -62,6 +62,18 @@
         "npm: watch-tests"
       ],
       "problemMatcher": []
+    },
+    {
+      "label": "Package Extension",
+      "type": "shell",
+      "command": "npm run package && npx vsce package",
+      "group": {
+        "kind": "build"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      }
     }
     // {
     //   "label": "npm: compile",

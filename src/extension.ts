@@ -10,15 +10,7 @@ import { TestRunner } from './testRunner';
  */
 export function activate(context: vscode.ExtensionContext): void {
   // Public function - exported
-  console.log('web-test-runner-extension is now active');
-
-  const disposable = vscode.commands.registerCommand('helloworld.helloWorld', () => {
-    // The code you place here will be executed every time your command is executed
-    // Display a message box to the user
-    vscode.window.showInformationMessage('Hello World from HelloWorld!');
-  });
-
-  context.subscriptions.push(disposable);
+  console.log('keyman-web-test-runner-extension is now active');
 
   const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
 

@@ -1,6 +1,6 @@
-import * as vscode from 'vscode';
-import { TestRunner } from './testRunner';
-import { TestDiscovery } from './testDiscovery';
+import * as vscode from "vscode";
+import { TestRunner } from "./testRunner";
+import { TestDiscovery } from "./testDiscovery";
 
 /**
  * Manages test discovery and execution using VS Code's Test Controller API
@@ -13,15 +13,22 @@ export class TestController implements vscode.Disposable {
 
   public constructor(private workspaceRoot: string, testRunner: TestRunner) {
     this.testRunner = testRunner;
-    this.controller = vscode.tests.createTestController('webTestRunner', 'Web Test Runner');
+    this.controller = vscode.tests.createTestController(
+      "webTestRunner",
+      "Web Test Runner"
+    );
     this.fileWatcher = vscode.workspace.createFileSystemWatcher(
-      '**/*.{test,tests,spec}.{ts,js}'
+      "**/*.{test,tests,spec}.{ts,js}"
     );
 
     this.setupFileWatcher();
     this.setupTestController();
 
-    this.testDiscovery = new TestDiscovery(this.workspaceRoot, this.controller, this.testRunner);
+    this.testDiscovery = new TestDiscovery(
+      this.workspaceRoot,
+      this.controller,
+      this.testRunner
+    );
   }
 
   public async discoverTests(): Promise<void> {
@@ -37,7 +44,11 @@ export class TestController implements vscode.Disposable {
     this.fileWatcher.onDidChange(() => this.discoverTests());
   }
 
-  private runFuncOnTest(test: vscode.TestItem, func: (test: vscode.TestItem, ...args: any[]) => void, args: any[] = []): void {
+  private runFuncOnTest(
+    test: vscode.TestItem,
+    func: (test: vscode.TestItem, ...args: any[]) => void,
+    args: any[] = []
+  ): void {
     func(test, ...args);
     test.children.forEach((child) => this.runFuncOnTest(child, func, args));
   }
@@ -52,7 +63,9 @@ export class TestController implements vscode.Disposable {
     };
 
     // Resolve handler
-    this.controller.resolveHandler = async (item: vscode.TestItem | undefined) => {
+    this.controller.resolveHandler = async (
+      item: vscode.TestItem | undefined
+    ) => {
       if (!item) {
         // Resolve root - discover all tests
         await this.discoverTests();
@@ -85,31 +98,32 @@ export class TestController implements vscode.Disposable {
             break;
           }
 
-          const filePath = (test.id.startsWith('test:') || test.id.startsWith('file:')) ? test.id.substring(5) : test.id;
+          const filePath =
+            test.id.startsWith("test:") || test.id.startsWith("file:")
+              ? test.id.substring(5)
+              : test.id;
           this.runFuncOnTest(test, run.started);
 
           try {
             const result = await this.testRunner.runTestFile(test, filePath);
 
-            const tests = test.id.split('::');
-            let file = tests[0].startsWith('file:') ? tests[0].substring(5) : tests[0];
-            file = file.substring(this.workspaceRoot.length + 1);
-            const fileRegex = /([a-zA-Z0-9_.-]+\/)+[a-zA-Z0-9_.-]+:\n/;
-            const sections = result.output.match(fileRegex);
-            if (sections) {
-              let i = -1;
-              for (const section of sections) {
-                i++;
-                if (section.includes(file)) {
-                  console.log('Found file', i);
-                  const parts = result.output.split(fileRegex);
-                  const part = parts[i];
-                  console.log('Part', part);
-                }
-              }
-            }
+            // Parse individual test results
+            const parsedResults = this.parseTestResults(result.output);
 
-            if (result.passed) {
+            // If we found individual test results, update them
+            if (parsedResults.size > 0) {
+              this.updateTestItemResults(test, run, parsedResults);
+              // Also mark parent test item
+              if (result.passed) {
+                run.passed(test);
+              } else {
+                run.failed(test, [
+                  new vscode.TestMessage(
+                    `Test failed: ${result.failedCount} failure(s)`
+                  ),
+                ]);
+              }
+            } else if (result.passed) {
               this.runFuncOnTest(test, run.passed);
             } else {
               const message = new vscode.TestMessage(
@@ -123,7 +137,8 @@ export class TestController implements vscode.Disposable {
               }
             }
           } catch (error) {
-            const errorMsg = error instanceof Error ? error.message : String(error);
+            const errorMsg =
+              error instanceof Error ? error.message : String(error);
             run.errored(test, new vscode.TestMessage(errorMsg));
           }
         }
@@ -133,18 +148,124 @@ export class TestController implements vscode.Disposable {
     };
 
     this.controller.createRunProfile(
-      'Web Test Runner',
+      "Web Test Runner",
       vscode.TestRunProfileKind.Run,
       runHandler,
       true
     );
 
+    const debugHandler = async (
+      request: vscode.TestRunRequest,
+      cancellation: vscode.CancellationToken
+    ) => {
+      // Start web-test-runner in debug mode
+      const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+      if (!workspaceFolder) {
+        return;
+      }
+
+      // Execute the background task to start web-test-runner
+      const tasks = await vscode.tasks.fetchTasks({ type: "shell" });
+      const backgroundTask = tasks.find(
+        (t) => t.name === "web: start dom-utils tests (background)"
+      );
+
+      if (backgroundTask) {
+        await vscode.tasks.executeTask(backgroundTask);
+        // Wait for server to start
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+      }
+
+      // Launch Chrome debugger for web-test-runner
+      await vscode.debug.startDebugging(workspaceFolder, {
+        name: "Web Test Runner (Debug)",
+        type: "pwa-chrome",
+        request: "launch",
+        url: "http://localhost:8000/",
+        webRoot: workspaceFolder.uri.fsPath,
+        runtimeArgs: [
+          "--remote-debugging-port=9222",
+          "--no-first-run",
+          "--user-data-dir=${workspaceFolder}/.vscode/chrome-user-data",
+        ],
+      });
+
+      // Run tests
+      await runHandler(request, cancellation);
+    };
+
     this.controller.createRunProfile(
-      'Web Test Runner (Debug)',
+      "Web Test Runner (Debug)",
       vscode.TestRunProfileKind.Debug,
-      runHandler,
+      debugHandler,
       true
     );
+  }
+
+  /**
+   * Parse individual test results from web-test-runner output
+   */
+  private parseTestResults(
+    output: string
+  ): Map<string, { passed: boolean; message?: string }> {
+    const results = new Map<string, { passed: boolean; message?: string }>();
+
+    // Strip ANSI control codes
+    const cleanOutput = output.replace(/\x1b\[[0-9;]*m/g, "");
+
+    // Parse test result lines: ✓ test name or 𐄂 test name
+    const testLineRegex = /^\s*([✓𐄂])\s+(.+)$/gm;
+    let match;
+
+    while ((match = testLineRegex.exec(cleanOutput)) !== null) {
+      const passed = match[1] === "✓";
+      const testName = match[2].trim();
+      results.set(testName, { passed });
+    }
+
+    // Parse failure details
+    const failureRegex =
+      /❌\s+(.+?)\n\s+(.+?)(?=\n\s*(?:Chromium|Firefox|Webkit|Finished|$))/gs;
+    let failureMatch;
+
+    while ((failureMatch = failureRegex.exec(cleanOutput)) !== null) {
+      const failedTest = failureMatch[1].trim();
+      const errorMessage = failureMatch[2].trim();
+      if (results.has(failedTest)) {
+        results.get(failedTest)!.message = errorMessage;
+      }
+    }
+
+    return results;
+  }
+
+  /**
+   * Update test item results based on parsed results
+   */
+  private updateTestItemResults(
+    testItem: vscode.TestItem,
+    run: vscode.TestRun,
+    results: Map<string, { passed: boolean; message?: string }>
+  ): void {
+    // Check direct children
+    for (const [, child] of testItem.children) {
+      const testTitle = child.label;
+      const result = results.get(testTitle);
+
+      if (result) {
+        if (result.passed) {
+          run.passed(child);
+        } else {
+          const message = new vscode.TestMessage(
+            result.message || "Test failed"
+          );
+          run.failed(child, [message]);
+        }
+      } else {
+        // Recursively check nested items
+        this.updateTestItemResults(child, run, results);
+      }
+    }
   }
 
   /**

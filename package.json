@@ -1,10 +1,14 @@
 {
-  "name": "web-test-runner-extension",
-  "displayName": "web-test-runner-extension",
-  "description": "A VSCode extension for web-test-runner",
+  "name": "keyman-web-test-runner-extension",
+  "displayName": "Keyman Web Test Runner",
+  "description": "A VSCode extension for web-test-runner especially with Keyman",
   "version": "0.0.1",
   "engines": {
     "vscode": "^1.108.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ermshiperete/keyman-web-test-runner-extension.git"
   },
   "categories": [
     "Testing"
@@ -13,14 +17,7 @@
     "workspaceContains:**/web-test-runner.config.mjs"
   ],
   "main": "./dist/extension.js",
-  "contributes": {
-    "commands": [
-      {
-        "command": "helloworld.helloWorld",
-        "title": "Hello World"
-      }
-    ]
-  },
+  "contributes": {},
   "scripts": {
     "vscode:prepublish": "npm run package",
     "compile": "npm run check-types && npm run lint && node esbuild.js",
@@ -45,6 +42,7 @@
     "@types/vscode": "^1.108.0",
     "@vscode/test-cli": "^0.0.12",
     "@vscode/test-electron": "^2.5.2",
+    "@vscode/vsce": "^3.7.1",
     "esbuild": "^0.27.2",
     "eslint": "^9.39.2",
     "jsdom-global": "^3.0.2",
