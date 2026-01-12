@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as cp from 'child_process';
 import * as path from 'path';
+import { Logger } from './logger';
 
 /**
  * Test run result
@@ -17,29 +18,20 @@ export interface TestRunResult {
 /**
  * Manages running web-test-runner tests
  */
-export class TestRunner implements vscode.Disposable {
-  private outputChannel: vscode.OutputChannel;
+export class TestRunner {
   private workspaceRoot: string;
   private testItemToConfigMap: Map<string, string> = new Map();
 
-  public constructor(workspaceRoot: string) {
+  public constructor(workspaceRoot: string, private logger: Logger) {
     this.workspaceRoot = workspaceRoot;
-    this.outputChannel = vscode.window.createOutputChannel('Web Test Runner');
-  }
-
-  /**
-   * Show output channel
-   */
-  public showOutput(): void {
-    this.outputChannel.show(true);
   }
 
   /**
    * Run all tests
    */
   public async runAllTests(test: vscode.TestItem): Promise<TestRunResult> {
-    this.outputChannel.clear();
-    this.outputChannel.appendLine('Running all tests...\n');
+    this.logger.clear();
+    this.logger.log('Running all tests...\n');
 
     return this.executeWebTestRunner(test);
   }
@@ -48,8 +40,8 @@ export class TestRunner implements vscode.Disposable {
    * Run a specific test file
    */
   public async runTestFile(test: vscode.TestItem, filePath: string): Promise<TestRunResult> {
-    this.outputChannel.clear();
-    this.outputChannel.appendLine(`Running test: ${path.basename(filePath)}\n`);
+    this.logger.clear();
+    this.logger.log(`Running test: ${path.basename(filePath)}\n`);
 
     return this.executeWebTestRunner(test, filePath);
   }
@@ -58,8 +50,8 @@ export class TestRunner implements vscode.Disposable {
    * Run a specific test
    */
   public async runSingleTest(test: vscode.TestItem, testName: string): Promise<TestRunResult> {
-    this.outputChannel.clear();
-    this.outputChannel.appendLine(`Running test: ${testName}\n`);
+    this.logger.clear();
+    this.logger.log(`Running test: ${testName}\n`);
 
     return this.executeWebTestRunner(test, undefined, testName);
   }
@@ -119,13 +111,13 @@ export class TestRunner implements vscode.Disposable {
         process.stdout?.on('data', (data) => {
           const text = data.toString();
           output += text;
-          this.outputChannel.append(text);
+          this.logger.log(text);
         });
 
         process.stderr?.on('data', (data) => {
           const text = data.toString();
           errorOutput += text;
-          this.outputChannel.append(text);
+          this.logger.log(text);
         });
 
         process.on('close', (code) => {
@@ -134,7 +126,7 @@ export class TestRunner implements vscode.Disposable {
         });
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : String(error);
-        this.outputChannel.appendLine(`\nError running tests: ${errorMsg}`);
+        this.logger.log(`\nError running tests: ${errorMsg}`);
         resolve({
           passed: false,
           testCount: 0,
@@ -206,12 +198,5 @@ export class TestRunner implements vscode.Disposable {
       output,
       errors
     };
-  }
-
-  /**
-   * Dispose resources
-   */
-  public dispose(): void {
-    this.outputChannel.dispose();
   }
 }

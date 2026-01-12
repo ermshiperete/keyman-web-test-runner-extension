@@ -41,6 +41,10 @@ async function main() {
 			/* add to the end of plugins array */
 			esbuildProblemMatcherPlugin,
 		],
+		// Bundle jsdom-global and its dependencies
+		loader: {
+			'.node': 'file',
+		},
 	});
 
 	// Build mocha reporter
@@ -54,7 +58,7 @@ async function main() {
 		sourcemap: !production,
 		sourcesContent: false,
 		platform: 'node',
-		outfile: 'out/mocha-reporter/hierarchical.js',
+		outfile: 'dist/mocha-reporter/hierarchical.js',
 		logLevel: 'silent',
 		plugins: [
 			esbuildProblemMatcherPlugin,

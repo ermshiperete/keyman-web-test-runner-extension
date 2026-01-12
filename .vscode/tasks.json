@@ -67,7 +67,7 @@
       "script": "compile",
       "problemMatcher": "$tsc-watch",
       "label": "npm: compile",
-      "group": "build"
+      "group": "build",
     },
     {
       "type": "npm",
@@ -93,7 +93,15 @@
       },
       "presentation": {
         "reveal": "always",
-        "panel": "new"
+        "panel": "dedicated"
+      }
+    },
+    {
+      "label": "Install package dependencies",
+      "type": "shell",
+      "command": "npm install --prefix dist jsdom-global",
+      "group": {
+        "kind": "build",
       }
     }
     // {

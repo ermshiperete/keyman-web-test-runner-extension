@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import { Logger } from "./logger";
 import { TestRunner } from "./testRunner";
 import { TestDiscovery } from "./testDiscovery";
 import { TestResultParser } from "./testResultParser";
@@ -8,12 +9,11 @@ import { TestResultParser } from "./testResultParser";
  */
 export class TestController implements vscode.Disposable {
   private controller: vscode.TestController;
-  private testRunner: TestRunner;
   private fileWatcher: vscode.FileSystemWatcher;
   private testDiscovery: TestDiscovery;
   private testResultParser: TestResultParser;
 
-  public constructor(private workspaceRoot: string, testRunner: TestRunner) {
+  public constructor(private workspaceRoot: string, private testRunner: TestRunner, private logger: Logger) {
     this.testRunner = testRunner;
     this.controller = vscode.tests.createTestController(
       "webTestRunner",
@@ -26,10 +26,13 @@ export class TestController implements vscode.Disposable {
     this.setupFileWatcher();
     this.setupTestController();
 
+    this.logger.log(`Test runner initialized for ${this.workspaceRoot}`);
+
     this.testDiscovery = new TestDiscovery(
       this.workspaceRoot,
       this.controller,
-      this.testRunner
+      this.testRunner,
+      this.logger
     );
     this.testResultParser = new TestResultParser();
   }

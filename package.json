@@ -2,6 +2,7 @@
   "name": "keyman-web-test-runner-extension",
   "displayName": "Keyman Web Test Runner",
   "description": "A VSCode extension for web-test-runner especially with Keyman",
+  "publisher": "ermshiperete",
   "version": "0.0.1",
   "engines": {
     "vscode": "^1.108.0"
@@ -35,6 +36,7 @@
   },
   "dependencies": {
     "@web/test-runner": "^0.18.1",
+    "jsdom-global": "^3.0.2",
     "mocha": "^11.7.5"
   },
   "devDependencies": {
@@ -46,9 +48,11 @@
     "@vscode/vsce": "^3.7.1",
     "esbuild": "^0.27.2",
     "eslint": "^9.39.2",
-    "jsdom-global": "^3.0.2",
     "npm-run-all": "^4.1.5",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.52.0"
-  }
+  },
+  "bundleDependencies": [
+    "jsdom-global"
+  ]
 }

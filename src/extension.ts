@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { Logger } from './logger';
 import { TestController } from './testController';
 import { TestRunner } from './testRunner';
 
@@ -19,13 +20,15 @@ export function activate(context: vscode.ExtensionContext): void {
     return;
   }
 
+  const logger = new Logger();
+  logger.log('Extension activated');
   // Initialize test runner and controller
-  const testRunner = new TestRunner(workspaceRoot);
-  const testController = new TestController(workspaceRoot, testRunner);
+  const testRunner = new TestRunner(workspaceRoot, logger);
+  const testController = new TestController(workspaceRoot, testRunner, logger);
 
   // Add to subscriptions for cleanup
   context.subscriptions.push(testController);
-  context.subscriptions.push(testRunner);
+  context.subscriptions.push(logger);
 
   // Initial test discovery
   testController.discoverTests();

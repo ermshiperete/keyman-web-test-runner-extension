@@ -4,13 +4,17 @@ import * as path from 'path';
 import { HierarchicalReport, SuiteResult } from './mocha-reporter/hierarchical';
 import { TestRunner } from './testRunner';
 import { ConfigLoader } from './configLoader';
+import { Logger } from './logger';
 
 export class TestDiscovery {
   public constructor(
     private workspaceRoot: string,
     private controller: vscode.TestController,
-    private testRunner: TestRunner
-  ) {}
+    private testRunner: TestRunner,
+    private logger: Logger
+  ) {
+    this.logger.log('Test discovery started');
+  }
 
   /**
    * Discover test files and populate test tree
@@ -19,6 +23,7 @@ export class TestDiscovery {
     const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
 
     if (!workspaceFolder) {
+      this.logger.log('Error: No workspace folder found');
       return;
     }
 
@@ -39,7 +44,7 @@ export class TestDiscovery {
     configPath: string,
     workspaceFolder: vscode.WorkspaceFolder
   ): Promise<void> {
-    console.log(`Discovering tests from config: ${configPath}`);
+    this.logger.log(`Discovering tests from config: ${configPath}`);
     const config = await ConfigLoader.loadConfig(configPath);
 
     // Process groups if they exist
@@ -112,12 +117,15 @@ export class TestDiscovery {
     configPath: string
   ): Promise<void> {
     try {
+      this.logger.log(`Discovering tests from ${fileUri.fsPath}`);
       const report = await this.runMochaForFile(fileUri.fsPath);
       if (report) {
         this.populateTestItemsFromReport(fileTestItem, report.root, configPath);
+      } else {
+        this.logger.log(`No tests found in ${fileUri.fsPath}`);
       }
     } catch (error) {
-      console.error(`Failed to discover tests from ${fileUri.fsPath}:`, error);
+      this.logger.log(`Error: Failed to discover tests from ${fileUri.fsPath}: ${error}`);
     }
   }
 
@@ -129,7 +137,49 @@ export class TestDiscovery {
       return null;
     }
 
-    return await discoverTestsWithMocha(this.workspaceRoot, filePath);
+    return new Promise((resolve) => {
+      try {
+        const args = ['mocha'];
+
+        args.push('--dry-run');
+        args.push('--reporter', path.join(__dirname, '../dist/mocha-reporter/hierarchical.js'));
+        args.push('--require', path.join(__dirname, '../dist/node_modules/jsdom-global/register.js'));
+        args.push(filePath);
+
+        const process = cp.spawn('npx', args, {
+          cwd: this.workspaceRoot,
+          stdio: ['pipe', 'pipe', 'pipe']
+        });
+
+        let output = '';
+        let errorOutput = '';
+
+        process.stdout?.on('data', (data) => {
+          const text = data.toString();
+          output += text;
+        });
+
+        process.stderr?.on('data', (data) => {
+          const text = data.toString();
+          errorOutput += text;
+        });
+
+        process.on('close', () => {
+          // Extract JSON from output (mocha may print other text)
+          const jsonMatch = output.match(/\{[\s\S]*\}/);
+          if (jsonMatch) {
+            const report = JSON.parse(jsonMatch[0]) as HierarchicalReport;
+            resolve(report);
+          } else {
+            resolve(null);
+          }
+        });
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        this.logger.log(`Error running tests: ${errorMsg}`);
+        resolve(null);
+      }
+    });
   }
 
   /**
@@ -185,51 +235,4 @@ export class TestDiscovery {
       this.testRunner.addTest(childTestItem, configPath);
     }
   }
-
-}
-
-export function discoverTestsWithMocha(workspace: string, file: string): Promise<HierarchicalReport | null> {
-  return new Promise((resolve) => {
-    try {
-      const args = ['mocha'];
-
-      args.push('--dry-run');
-      args.push('--reporter', path.join(__dirname, '../out/mocha-reporter/hierarchical.js'));
-      args.push('--require', path.join(__dirname, '../node_modules/jsdom-global/register.js'));
-      args.push(file);
-
-      const process = cp.spawn('npx', args, {
-        cwd: workspace,
-        stdio: ['pipe', 'pipe', 'pipe']
-      });
-
-      let output = '';
-      let errorOutput = '';
-
-      process.stdout?.on('data', (data) => {
-        const text = data.toString();
-        output += text;
-      });
-
-      process.stderr?.on('data', (data) => {
-        const text = data.toString();
-        errorOutput += text;
-      });
-
-      process.on('close', () => {
-        // Extract JSON from output (mocha may print other text)
-        const jsonMatch = output.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-          const report = JSON.parse(jsonMatch[0]) as HierarchicalReport;
-          resolve(report);
-        } else {
-          resolve(null);
-        }
-      });
-    } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : String(error);
-      console.error(`Error running tests: ${errorMsg}`);
-      resolve(null);
-    }
-  });
 }
