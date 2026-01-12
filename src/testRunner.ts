@@ -30,7 +30,6 @@ export class TestRunner {
    * Run all tests
    */
   public async runAllTests(test: vscode.TestItem): Promise<TestRunResult> {
-    this.logger.clear();
     this.logger.log('Running all tests...\n');
 
     return this.executeWebTestRunner(test);
@@ -40,8 +39,7 @@ export class TestRunner {
    * Run a specific test file
    */
   public async runTestFile(test: vscode.TestItem, filePath: string): Promise<TestRunResult> {
-    this.logger.clear();
-    this.logger.log(`Running test: ${path.basename(filePath)}\n`);
+    this.logger.log(`Running test file: ${path.basename(filePath)}\n`);
 
     return this.executeWebTestRunner(test, filePath);
   }
@@ -50,8 +48,7 @@ export class TestRunner {
    * Run a specific test
    */
   public async runSingleTest(test: vscode.TestItem, testName: string): Promise<TestRunResult> {
-    this.logger.clear();
-    this.logger.log(`Running test: ${testName}\n`);
+    this.logger.log(`Running single test: ${testName}\n`);
 
     return this.executeWebTestRunner(test, undefined, testName);
   }

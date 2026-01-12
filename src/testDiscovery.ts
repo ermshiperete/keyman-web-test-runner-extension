@@ -171,6 +171,9 @@ export class TestDiscovery {
             const report = JSON.parse(jsonMatch[0]) as HierarchicalReport;
             resolve(report);
           } else {
+            this.logger.log(`Running mocha ${args} exited with ${process.exitCode}`);
+            this.logger.log(`Output: ${output}`);
+            this.logger.log(`Error output: ${errorOutput}`);
             resolve(null);
           }
         });
@@ -212,6 +215,7 @@ export class TestDiscovery {
           sourceFileUri
         );
         parentItem.children.add(suiteItem);
+        this.testRunner.addTest(suiteItem, configPath);
         this.populateTestItemsFromReport(suiteItem, suite, configPath);
       }
     }
