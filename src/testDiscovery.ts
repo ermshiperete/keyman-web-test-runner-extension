@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as cp from 'child_process';
 import * as path from 'path';
+import * as fs from 'fs';
 import { HierarchicalReport, SuiteResult } from './mocha-reporter/hierarchical';
 import { TestRunner } from './testRunner';
 import { ConfigLoader } from './configLoader';
@@ -94,10 +95,6 @@ export class TestDiscovery {
           `file:${fileUri.path}`,
           path.basename(fileUri.path),
           sourceFileUri
-        );
-        testItem.range = new vscode.Range(
-          new vscode.Position(0, 0),
-          new vscode.Position(0, 0)
         );
         groupItem.children.add(testItem);
         this.testRunner.addTest(testItem, configPath);
@@ -206,6 +203,8 @@ export class TestDiscovery {
     configPath: string
   ): void {
     const sourceFileUri = this.getSourceFileUri(parentItem.uri!);
+    const fileContent = this.getFileContent(sourceFileUri.fsPath);
+    const lineMap = this.extractLineNumbers(fileContent);
 
     if (reportItem.suites) {
       for (const suite of reportItem.suites) {
@@ -214,6 +213,13 @@ export class TestDiscovery {
           suite.title,
           sourceFileUri
         );
+        const lineNumber = lineMap.get(`describe:${suite.title}`);
+        if (lineNumber !== undefined) {
+          suiteItem.range = new vscode.Range(
+            new vscode.Position(lineNumber, 0),
+            new vscode.Position(lineNumber, 0)
+          );
+        }
         parentItem.children.add(suiteItem);
         this.testRunner.addTest(suiteItem, configPath);
         this.populateTestItemsFromReport(suiteItem, suite, configPath);
@@ -231,12 +237,52 @@ export class TestDiscovery {
         test.title,
         sourceFileUri
       );
-      childTestItem.range = new vscode.Range(
-        new vscode.Position(0, 0),
-        new vscode.Position(0, 0)
-      );
+      const lineNumber = lineMap.get(`it:${test.title}`);
+      if (lineNumber !== undefined) {
+        childTestItem.range = new vscode.Range(
+          new vscode.Position(lineNumber, 0),
+          new vscode.Position(lineNumber, 0)
+        );
+      }
       parentItem.children.add(childTestItem);
       this.testRunner.addTest(childTestItem, configPath);
     }
+  }
+
+  /**
+   * Get file content safely
+   */
+  private getFileContent(filePath: string): string {
+    try {
+      return fs.readFileSync(filePath, 'utf-8');
+    } catch {
+      return '';
+    }
+  }
+
+  /**
+   * Extract line numbers for describe() and it() blocks from source content
+   */
+  private extractLineNumbers(content: string): Map<string, number> {
+    const lineMap = new Map<string, number>();
+    const lines = content.split('\n');
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+
+      // Match describe blocks: describe('title', ...) or describe("title", ...)
+      const describeMatch = line.match(/describe\s*\(\s*['"`]([^'"`]+)['"`]/);
+      if (describeMatch) {
+        lineMap.set(`describe:${describeMatch[1]}`, i);
+      }
+
+      // Match it/test blocks: it('title', ...) or it("title", ...)
+      const itMatch = line.match(/(?:it|test)\s*\(\s*['"`]([^'"`]+)['"`]/);
+      if (itMatch) {
+        lineMap.set(`it:${itMatch[1]}`, i);
+      }
+    }
+
+    return lineMap;
   }
 }
